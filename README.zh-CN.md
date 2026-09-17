@@ -16,7 +16,29 @@ maybe  = None
 
 思路来自 [BugStalker](https://github.com/godzie44/BugStalker) 的 `vard` / `argd` 命令，这里是把它移植到 gdb 和 lldb 的 Python API 上，Rust 相关的知识两边共用。
 
-## 安装
+## 一键上手
+
+一行命令，之后这台机器上的每个 `gdb` / `lldb` 会话都自带这些命令：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hsqStephenZhang/rust-debug-fmt/main/install.sh | sh
+```
+
+安装脚本会把仓库放到 `~/.rust-debug-fmt`，检测你装了 gdb 还是 lldb，并在 `~/.gdbinit` / `~/.lldbinit` 里追加一段带标记的配置。再跑一次就是更新；`sh ~/.rust-debug-fmt/install.sh --uninstall` 会完整卸载。然后在任何 Rust 项目里：
+
+```sh
+cargo build
+gdb target/debug/your-bin          # 或者：lldb target/debug/your-bin
+(gdb) break your_crate::main
+(gdb) run
+(gdb) rlocals                      # 所有局部变量，按 {:?} 输出
+(gdb) rprint some_var.field        # 单个表达式
+```
+
+项目本身不需要做任何改动。如果某个类型被报告缺少 `Debug::fmt`，见[让 `Debug::fmt` 存在于二进制里](#让-debugfmt-存在于二进制里)。
+
+<details>
+<summary>手动安装</summary>
 
 纯 Python，除调试器自带的解释器外没有任何依赖。
 
@@ -31,6 +53,7 @@ echo 'command script import ~/rust-debug-fmt/rust_debug_fmt_lldb.py' >> ~/.lldbi
 ```
 
 `gdb` / `rust-gdb` 和 `lldb` / `rust-lldb` 都会读取这些 init 文件。只想在某次会话里临时加载，就在调试器里执行那一行 `source` / `command script import`。
+</details>
 
 | | 要求 | 实测 |
 |---|---|---|

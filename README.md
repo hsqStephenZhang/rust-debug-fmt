@@ -26,7 +26,33 @@ The technique is borrowed from [BugStalker](https://github.com/godzie44/BugStalk
 `vard` / `argd` commands; this is a port of the idea to the Python APIs of gdb
 and lldb, with the Rust knowledge shared between both.
 
-## Install
+## Quick start
+
+One line, then every `gdb` / `lldb` session on the machine has the commands:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hsqStephenZhang/rust-debug-fmt/main/install.sh | sh
+```
+
+The installer clones into `~/.rust-debug-fmt`, detects which of gdb / lldb
+you have, and adds a marked block to `~/.gdbinit` / `~/.lldbinit`. Run it
+again to update; `sh ~/.rust-debug-fmt/install.sh --uninstall` removes
+everything. Then, in any Rust project:
+
+```sh
+cargo build
+gdb target/debug/your-bin          # or: lldb target/debug/your-bin
+(gdb) break your_crate::main
+(gdb) run
+(gdb) rlocals                      # every local, as {:?}
+(gdb) rprint some_var.field        # one expression
+```
+
+Nothing to add to the project. If a type is reported as missing its
+`Debug::fmt`, see [Making `Debug::fmt` available](#making-debugfmt-available).
+
+<details>
+<summary>Manual install</summary>
 
 Pure Python, no dependencies beyond the debugger's bundled interpreter.
 
@@ -43,6 +69,7 @@ echo 'command script import ~/rust-debug-fmt/rust_debug_fmt_lldb.py' >> ~/.lldbi
 Both `gdb` / `rust-gdb` and `lldb` / `rust-lldb` pick the init files up. To
 load for one session only, run the `source` / `command script import` line
 inside the debugger.
+</details>
 
 | | requirement | tested |
 |---|---|---|

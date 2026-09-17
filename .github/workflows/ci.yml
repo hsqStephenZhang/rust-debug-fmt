@@ -77,3 +77,41 @@ jobs:
           lldb --batch -o 'script import lldb; print("lldb python ok", lldb.SBDebugger.GetVersionString())'
       - name: run tests
         run: DEBUGGER=lldb tests/run.sh
+
+  installer:
+    name: install.sh / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - name: debuggers
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            sudo apt-get update && sudo apt-get install -y gdb lldb python3-lldb
+          fi
+      - name: install from this checkout into a fresh HOME
+        run: |
+          export HOME="$(mktemp -d)"
+          RDF_REPO="file://$PWD" sh install.sh
+          cat "$HOME/.lldbinit"
+          lldb --batch -o 'help rprint' | grep -q 'Print Rust values'
+          if [ "$RUNNER_OS" = Linux ]; then
+            cat "$HOME/.gdbinit"
+            gdb -q -batch -ex 'help rprint' | grep -q 'Print Rust values'
+          fi
+          # second run must not duplicate the blocks
+          RDF_REPO="file://$PWD" sh install.sh >/dev/null
+          test "$(grep -c 'rust-debug-fmt >>>' "$HOME/.lldbinit")" = 1
+          sh "$HOME/.rust-debug-fmt/install.sh" --uninstall
+          test ! -e "$HOME/.lldbinit"
+          test ! -d "$HOME/.rust-debug-fmt"
+      - name: tarball path (no git)
+        if: runner.os == 'Linux'
+        run: |
+          export HOME="$(mktemp -d)"
+          F="$(mktemp -d)"; for c in sh curl tar gzip sed awk mkdir grep tail od tr mv printf rm ls cat; do ln -s "$(command -v $c)" "$F/$c"; done
+          PATH="$F" RDF_REF="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" RDF_FORCE_GDB=1 RDF_NO_LLDB=1 sh install.sh
+          test -f "$HOME/.rust-debug-fmt/rust_debug_fmt_gdb.py"
