@@ -146,6 +146,32 @@ inferior call per local. The reentrancy guard makes sure our own calls never
 trigger the printer recursively, and anything that fails falls back to the
 native display.
 
+### VS Code with CodeLLDB
+
+CodeLLDB bundles its own lldb + Python; nothing else to install. Add to
+`launch.json` (or, for every session, to `settings.json` under
+`lldb.launch.initCommands` / `lldb.launch.postRunCommands`):
+
+```jsonc
+{
+  "type": "lldb",
+  "request": "launch",
+  "name": "my-bin",
+  "cargo": { "args": ["build", "--bin=my-bin"] },
+  "sourceLanguages": ["rust"],
+  "initCommands": ["command script import ~/.rust-debug-fmt/rust_debug_fmt_lldb.py"],
+  "postRunCommands": ["rfmt-set auto on"]
+}
+```
+
+Now the Variables panel, Watch, hover and the Debug Console (`rprint x`,
+`v x`) all show Debug output. `rfmt-set auto on` goes into `postRunCommands`
+on purpose: CodeLLDB loads the Rust toolchain's formatters when it creates the
+target, and lldb gives precedence to the most recently enabled formatter
+category. A stop-hook installed by `rfmt-set auto on` re-asserts our
+precedence at every stop, so the order only matters for the very first stop.
+`examples/demo/.vscode/launch.json` is a complete example.
+
 ## Making `Debug::fmt` available
 
 rustc only monomorphizes what the program uses, and the linker drops unused

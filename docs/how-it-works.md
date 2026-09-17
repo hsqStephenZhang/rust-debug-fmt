@@ -212,6 +212,17 @@ into the debugger's own value display.
   is the switch. Returning `""` makes lldb fall back to its normal display
   (returning `None` would print the word "None"), so declining is invisible.
   Pointers, builtins and unsupported aggregates decline.
+- **Category precedence (lldb):** the Rust toolchain's formatters
+  (`lldb_commands`, loaded by `rust-lldb` and by CodeLLDB when
+  `sourceLanguages` contains `rust`) register a catch-all summary and
+  synthetic provider in the `Rust` category, and lldb consults the most
+  recently *enabled* category first, an empty summary from a higher category
+  still counts as handled. So `rfmt-set auto on` also installs a target
+  stop-hook running `type category enable rust-debug-fmt`, which moves our
+  category back in front at every stop regardless of load order. Without a
+  target (e.g. in `initCommands` or `~/.lldbinit`) the hook cannot be created
+  yet, hence the recommendation to run `rfmt-set auto on` in
+  `postRunCommands`.
 - **Reentrancy:** a `debug_format` in flight can make the debugger print
   values (frame lines when the callee stops, fallbacks calling
   `GetSummary()`). A guard flag makes the printer / summary decline while one

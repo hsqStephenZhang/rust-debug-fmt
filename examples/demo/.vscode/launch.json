@@ -1,0 +1,23 @@
+{
+  // CodeLLDB (vadimcn.vscode-lldb) launch configuration with rust-debug-fmt.
+  // Requires: curl -fsSL https://raw.githubusercontent.com/hsqStephenZhang/rust-debug-fmt/main/install.sh | sh
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "demo (rust-debug-fmt)",
+      "cargo": { "args": ["build", "--bin=demo"] },
+      "sourceLanguages": ["rust"],
+      // load the commands (target does not exist yet here)
+      "initCommands": [
+        "command script import ~/.rust-debug-fmt/rust_debug_fmt_lldb.py"
+      ],
+      // enable automatic mode AFTER the target exists and CodeLLDB has loaded
+      // the Rust toolchain formatters, so ours takes precedence
+      "postRunCommands": [
+        "rfmt-set auto on"
+      ]
+    }
+  ]
+}

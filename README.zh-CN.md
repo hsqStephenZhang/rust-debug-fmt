@@ -109,6 +109,24 @@ $1 = Running { pid: 42, cfg: Config { name: "", retries: 0, tags: [] } }
 
 代价要清楚：每显示一个值就会在你的进程里跑一次 `Debug::fmt`，一个每次 `step` 都刷新全部局部变量的看板，每个变量就是一次 inferior call。重入保护保证我们自己发起的调用不会再触发 printer，失败的情况一律回退到原生显示。
 
+### VS Code + CodeLLDB
+
+CodeLLDB 自带 lldb 和 Python，不需要额外安装。在 `launch.json` 里加两项（想对所有会话生效，就写进 `settings.json` 的 `lldb.launch.initCommands` / `lldb.launch.postRunCommands`）：
+
+```jsonc
+{
+  "type": "lldb",
+  "request": "launch",
+  "name": "my-bin",
+  "cargo": { "args": ["build", "--bin=my-bin"] },
+  "sourceLanguages": ["rust"],
+  "initCommands": ["command script import ~/.rust-debug-fmt/rust_debug_fmt_lldb.py"],
+  "postRunCommands": ["rfmt-set auto on"]
+}
+```
+
+之后 Variables 面板、Watch、悬停提示和 Debug Console（`rprint x`、`v x`）都是 Debug 输出。`rfmt-set auto on` 特意放在 `postRunCommands`：CodeLLDB 在创建 target 时加载 Rust 工具链的 formatter，而 lldb 让最近一次启用的 formatter 分类优先。`rfmt-set auto on` 还会装一个 stop-hook，每次停下都重新把我们的分类排到最前，所以顺序只影响第一次停下之前的显示。`examples/demo/.vscode/launch.json` 是完整示例。
+
 ## 让 `Debug::fmt` 存在于二进制里
 
 rustc 只会单态化程序真正用到的东西，链接器还会丢掉没用到的 std 代码。所以只有程序在某处用 `{:?}` 格式化过 `T`，二进制里才有 `<T as Debug>::fmt`。否则会看到：

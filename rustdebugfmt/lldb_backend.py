@@ -413,15 +413,47 @@ def auto_summary(valobj, internal_dict):
         return ""
 
 
-def _set_auto(debugger, on):
+_STOP_HOOKS = {}  # target id -> stop-hook id
+
+
+def _set_auto(debugger, on, result=None):
+    """Enable/disable automatic mode.
+
+    Other formatter categories (the Rust toolchain's, loaded by rust-lldb and
+    CodeLLDB) contain catch-all summaries, and lldb consults the most recently
+    *enabled* category first. So besides enabling ours now, a stop-hook
+    re-enables it at every stop, which keeps it in front no matter who loads
+    after us. The hook needs a target; without one we can only warn.
+    """
     SETTINGS["auto"] = on
+    target = debugger.GetSelectedTarget()
     if on:
         debugger.HandleCommand(
             "type summary add -w %s -x '^.*$' --python-function %s.auto_summary" % (CATEGORY, __name__)
         )
         debugger.HandleCommand("type category enable %s" % CATEGORY)
+        if target.IsValid():
+            tid = target.GetUniqueID() if hasattr(target, "GetUniqueID") else str(target)
+            if tid not in _STOP_HOOKS:
+                res = lldb.SBCommandReturnObject()
+                debugger.GetCommandInterpreter().HandleCommand(
+                    "target stop-hook add -o 'type category enable %s'" % CATEGORY, res
+                )
+                m = re.search(r"#(\d+)", res.GetOutput() or "")
+                _STOP_HOOKS[tid] = int(m.group(1)) if m else None
+        elif result is not None:
+            result.AppendMessage(
+                "rfmt: no target yet. Formatters loaded later (e.g. the Rust toolchain's) will take "
+                "precedence until you run `rfmt-set auto on` again with a target (CodeLLDB: put it in "
+                "postRunCommands)."
+            )
     else:
         debugger.HandleCommand("type category disable %s" % CATEGORY)
+        if target.IsValid():
+            tid = target.GetUniqueID() if hasattr(target, "GetUniqueID") else str(target)
+            hook = _STOP_HOOKS.pop(tid, None)
+            if hook is not None:
+                debugger.HandleCommand("target stop-hook delete %d" % hook)
 
 
 def _frame(exe_ctx, debugger):
@@ -568,7 +600,7 @@ rfmt-set                         show current settings"""
             raise RfmtError("expected on|off")
         flag = val in ("on", "true", "1")
         if key == "auto":
-            _set_auto(debugger, flag)
+            _set_auto(debugger, flag, result)
         else:
             SETTINGS[key] = flag
 
