@@ -26,6 +26,12 @@ The technique is borrowed from [BugStalker](https://github.com/godzie44/BugStalk
 `vard` / `argd` commands; this is a port of the idea to the Python APIs of gdb
 and lldb, with the Rust knowledge shared between both.
 
+## Demo
+
+here is a clear comparison between gdb's default output and our output, where the default output even overflowed my terminal:
+
+![demo](./assets/demo.png)
+
 ## Quick start
 
 One line, then every `gdb` / `lldb` session on the machine has the commands:
