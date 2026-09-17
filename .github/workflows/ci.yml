@@ -13,7 +13,7 @@ jobs:
     name: python syntax
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: python3 -m py_compile rustdebugfmt/*.py rust_debug_fmt_gdb.py rust_debug_fmt_lldb.py
 
   linux:
@@ -25,7 +25,7 @@ jobs:
         debugger: [gdb, lldb]
         toolchain: [stable, "1.84", nightly]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
@@ -49,7 +49,7 @@ jobs:
     name: linux / gdb+lldb / v0 symbol mangling
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - run: |
           sudo apt-get update
@@ -66,7 +66,7 @@ jobs:
       matrix:
         toolchain: [stable, nightly]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}

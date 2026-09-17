@@ -427,6 +427,17 @@ class GdbBackend(core.Backend):
             raise RfmtError(str(e))
 
     # -- values --
+    def _int_value(self, value, t):
+        try:
+            return int(value)
+        except gdb.error:
+            # gdb < 16: "That operation is not available on integers of more than 8 bytes"
+            raw = bytes(value.bytes)
+            signed = getattr(t, "is_signed", None)
+            if signed is None:
+                signed = not str(t).startswith("u")
+            return int.from_bytes(raw, self.byteorder(), signed=bool(signed))
+
     def value_info(self, value):
         try:
             if value.is_optimized_out:
@@ -442,7 +453,7 @@ class GdbBackend(core.Backend):
             elif t.code == gdb.TYPE_CODE_CHAR:
                 kind, scalar = "char", int(value)
             elif t.code == gdb.TYPE_CODE_INT:
-                kind, scalar = "int", int(value)
+                kind, scalar = "int", self._int_value(value, t)
             elif t.code == gdb.TYPE_CODE_FLT:
                 kind, scalar = "float", float(value)
             elif t.code == gdb.TYPE_CODE_ARRAY:
