@@ -193,6 +193,34 @@ any partial output the impl managed to write).
 bytes are read from `ptr` and decoded as UTF-8. If `cap > 0` the heap buffer
 is released by calling `drop_in_place::<String>` on the header.
 
+## Automatic mode
+
+`set rfmt-auto on` (gdb) / `rfmt-set auto on` (lldb) plugs the same pipeline
+into the debugger's own value display.
+
+- **gdb:** a pretty-printer lookup function is inserted at index 0 of
+  `gdb.pretty_printers` *and* of every objfile's `pretty_printers` list (also
+  for objfiles loaded later, via `new_objfile`). Objfile printers are consulted
+  before global ones and rust-gdb registers there, so being first in those lists
+  is what makes us win. The lookup claims a value only if the process is
+  stopped, the type is a struct / union / enum / array, and `choose_debug_fmt`
+  finds a candidate (cached per type name); everything else returns `None` and
+  gdb continues down the chain. `to_string()` runs `debug_format`, or
+  `format_string(raw=True)` if that fails.
+- **lldb:** a Python summary provider registered with `type summary add -x
+  '^.*$'` in the category `rust-debug-fmt`; enabling / disabling the category
+  is the switch. Returning `""` makes lldb fall back to its normal display
+  (returning `None` would print the word "None"), so declining is invisible.
+  Pointers, builtins and unsupported aggregates decline.
+- **Reentrancy:** a `debug_format` in flight can make the debugger print
+  values (frame lines when the callee stops, fallbacks calling
+  `GetSummary()`). A guard flag makes the printer / summary decline while one
+  of our calls is running, so there is never a nested inferior call.
+- **Formatting:** `{:?}` by default. gdb: `set rfmt-auto-pretty on|off|auto`
+  (`auto` follows `set print pretty`; note gdb-dashboard turns `print pretty`
+  on and then squashes newlines, which is why the default is `off`). lldb:
+  `rfmt-set pretty on`.
+
 ## Differences from BugStalker
 
 | | BugStalker (`src/debugger/call/fmt.rs`) | this project |

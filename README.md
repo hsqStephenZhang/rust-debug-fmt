@@ -96,6 +96,7 @@ signing), so use the lldb backend there. It is what the macOS CI job runs.
 | `rlocals [-p]` | ✓ | ✓ | every local of the selected frame (BugStalker's `vard locals`) |
 | `rargs [-p]` | ✓ | ✓ | every argument of the selected frame (`argd all`) |
 | `$rfmt(EXPR [, 1])` | ✓ | – | convenience function returning the text; for `printf`, `dprintf`, breakpoint conditions |
+| `set rfmt-auto on` | ✓ | `rfmt-set auto on` | automatic mode: `print`/`frame variable`/dashboards use Debug::fmt (see below) |
 | `set rfmt-verbose on` | ✓ | `rfmt-set verbose on` | log which symbol was picked and what was called |
 | `set rfmt-scheduler-lock off` | ✓ | `rfmt-set scheduler-lock off` | let other threads run during the call (default: only the current thread) |
 | | | `rfmt-set timeout 60` | expression timeout in seconds (lldb, default 30) |
@@ -113,6 +114,37 @@ available and say why.
 (lldb) rprint -p state
 (lldb) rargs
 ```
+
+## Automatic mode: `print`, `frame variable`, dashboards, IDEs
+
+Off by default. Turn it on and the debugger's *own* commands show Debug output
+for every aggregate that has a `Debug::fmt`, while scalars, pointers and types
+without one keep their native display:
+
+```
+(gdb) set rfmt-auto on                 (lldb) rfmt-set auto on
+(gdb) print state                      (lldb) v state
+$1 = Running { pid: 42, cfg: Config { name: "", retries: 0, tags: [] } }
+(gdb) info locals                      (lldb) frame variable
+```
+
+This covers gdb-dashboard's Variables/Expressions panels, `display`, `finish`'s
+"Value returned", lldb's `p` / `v` / `frame variable`, and IDE variable views
+that sit on top of them (VS Code with CodeLLDB or the native lldb adapter).
+In gdb it is a pretty printer installed ahead of the rust-gdb ones; in lldb a
+type summary in the category `rust-debug-fmt`. Put the `set` line in your
+init file to have it always.
+
+| setting | gdb | lldb |
+|---|---|---|
+| enable | `set rfmt-auto on` | `rfmt-set auto on` |
+| `{:#?}` instead of `{:?}` | `set rfmt-auto-pretty on` (`auto` follows `set print pretty`) | `rfmt-set pretty on` |
+
+Keep in mind what it costs: every value shown runs `Debug::fmt` inside your
+process, so a dashboard that refreshes all locals on each `step` performs one
+inferior call per local. The reentrancy guard makes sure our own calls never
+trigger the printer recursively, and anything that fails falls back to the
+native display.
 
 ## Making `Debug::fmt` available
 

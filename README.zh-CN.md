@@ -73,6 +73,7 @@ echo 'command script import ~/rust-debug-fmt/rust_debug_fmt_lldb.py' >> ~/.lldbi
 | `rlocals [-p]` | ✓ | ✓ | 当前帧全部局部变量（BugStalker 的 `vard locals`） |
 | `rargs [-p]` | ✓ | ✓ | 当前帧全部参数（`argd all`） |
 | `$rfmt(EXPR [, 1])` | ✓ | – | 返回文本的便捷函数，用于 `printf`、`dprintf`、断点条件 |
+| `set rfmt-auto on` | ✓ | `rfmt-set auto on` | 自动模式：`print` / `frame variable` / 看板走 Debug::fmt（见下文） |
 | `set rfmt-verbose on` | ✓ | `rfmt-set verbose on` | 打印选中的符号和调用过程 |
 | `set rfmt-scheduler-lock off` | ✓ | `rfmt-set scheduler-lock off` | 调用期间允许其他线程运行（默认只跑当前线程） |
 | | | `rfmt-set timeout 60` | 表达式超时秒数（lldb，默认 30） |
@@ -87,6 +88,26 @@ echo 'command script import ~/rust-debug-fmt/rust_debug_fmt_lldb.py' >> ~/.lldbi
 (lldb) rprint -p state
 (lldb) rargs
 ```
+
+## 自动模式：`print`、`frame variable`、看板、IDE
+
+默认关闭。打开后，调试器**自己的**命令对每个有 `Debug::fmt` 的聚合类型都显示 Debug 输出；标量、指针和没有 `Debug` 的类型保持原生显示：
+
+```
+(gdb) set rfmt-auto on                 (lldb) rfmt-set auto on
+(gdb) print state                      (lldb) v state
+$1 = Running { pid: 42, cfg: Config { name: "", retries: 0, tags: [] } }
+(gdb) info locals                      (lldb) frame variable
+```
+
+覆盖范围包括 gdb-dashboard 的 Variables / Expressions 面板、`display`、`finish` 的 "Value returned"、lldb 的 `p` / `v` / `frame variable`，以及建立在它们之上的 IDE 变量视图（VS Code 的 CodeLLDB 或原生 lldb 适配器）。gdb 里是一个排在 rust-gdb 之前的 pretty printer；lldb 里是 `rust-debug-fmt` 分类下的 type summary。把那行 `set` 写进 init 文件就是常开。
+
+| 设置 | gdb | lldb |
+|---|---|---|
+| 开启 | `set rfmt-auto on` | `rfmt-set auto on` |
+| 用 `{:#?}` 代替 `{:?}` | `set rfmt-auto-pretty on`（`auto` 则跟随 `set print pretty`） | `rfmt-set pretty on` |
+
+代价要清楚：每显示一个值就会在你的进程里跑一次 `Debug::fmt`，一个每次 `step` 都刷新全部局部变量的看板，每个变量就是一次 inferior call。重入保护保证我们自己发起的调用不会再触发 printer，失败的情况一律回退到原生显示。
 
 ## 让 `Debug::fmt` 存在于二进制里
 

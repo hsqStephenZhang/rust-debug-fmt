@@ -38,6 +38,31 @@ VERBOSE = _BoolParam("rfmt-verbose", False, "whether rust-debug-fmt logs its wor
 SCHED_LOCK = _BoolParam(
     "rfmt-scheduler-lock", True, "whether rust-debug-fmt runs only the current thread during the call"
 )
+AUTO = _BoolParam(
+    "rfmt-auto",
+    False,
+    "whether print / info locals / dashboards show Rust values through Debug::fmt automatically",
+)
+
+
+class _AutoPretty(gdb.Parameter):
+    """how automatic mode formats: off = {:?}, on = {:#?}, auto = {:#?} when `print pretty` is on"""
+
+    set_doc = "Set how rust-debug-fmt's automatic mode formats values"
+    show_doc = "Show how rust-debug-fmt's automatic mode formats values"
+
+    def __init__(self):
+        super(_AutoPretty, self).__init__("rfmt-auto-pretty", gdb.COMMAND_DATA, gdb.PARAM_ENUM, ["off", "on", "auto"])
+        self.value = "off"
+
+    def get_set_string(self):
+        return ""
+
+    def get_show_string(self, svalue):
+        return "rust-debug-fmt automatic mode formatting is %s" % svalue
+
+
+AUTO_PRETTY = _AutoPretty()
 
 
 # --------------------------------------------------------------------------
@@ -228,6 +253,7 @@ class GdbBackend(core.Backend):
         self._functions = {}
         self._string_layout = None
         self._demangled = {}
+        self.auto_cache = {}
 
     # -- environment --
     def ptr_size(self):
@@ -493,12 +519,87 @@ def debug_format(value, pretty=False):
 
 def _native_text(val):
     try:
-        return val.format_string(max_elements=16, max_depth=2)
+        return val.format_string(raw=True, max_elements=16, max_depth=2)
     except (gdb.error, TypeError):
         try:
             return str(val)
         except gdb.error as e:
             return "<%s>" % e
+
+
+# --------------------------------------------------------------------------
+# automatic mode: a pretty printer that hands aggregates to Debug::fmt
+# --------------------------------------------------------------------------
+
+GUARD = core.ReentrancyGuard()
+
+
+def _inferior_stopped():
+    try:
+        inf = gdb.selected_inferior()
+        if inf is None or inf.pid == 0:
+            return False
+        th = gdb.selected_thread()
+        return th is not None and th.is_valid() and th.is_stopped()
+    except gdb.error:
+        return False
+
+
+class _AutoPrinter(object):
+    def __init__(self, value):
+        self.value = value
+
+    def to_string(self):
+        if GUARD.active:
+            return self.value.format_string(raw=True)
+        with GUARD:
+            try:
+                mode = AUTO_PRETTY.value
+                pretty = mode == "on" or (mode == "auto" and bool(gdb.parameter("print pretty")))
+                return debug_format(self.value, pretty)
+            except (RfmtError, gdb.error) as e:
+                BACKEND.log("auto: %s" % e)
+                try:
+                    return self.value.format_string(raw=True)
+                except gdb.error:
+                    return None
+
+
+def _auto_lookup(value):
+    """gdb pretty-printer lookup: claim aggregates whose Debug::fmt exists."""
+    if not AUTO.value or GUARD.active:
+        return None
+    try:
+        if not _inferior_stopped():
+            return None
+        t = value.type.strip_typedefs()
+        if t.code not in (gdb.TYPE_CODE_STRUCT, gdb.TYPE_CODE_UNION, gdb.TYPE_CODE_ARRAY, gdb.TYPE_CODE_ENUM):
+            return None
+        with GUARD:  # choose_debug_fmt may run `info functions`; never recurse
+            info = BACKEND.value_info(value)
+            if not core.auto_supported(BACKEND, info, BACKEND.auto_cache):
+                return None
+        return _AutoPrinter(value)
+    except (RfmtError, gdb.error):
+        return None
+
+
+def _install_auto_printer(objfile=None):
+    lists = [objfile.pretty_printers] if objfile is not None else [gdb.pretty_printers] + [
+        o.pretty_printers for o in gdb.objfiles()
+    ]
+    for lst in lists:
+        if _auto_lookup not in lst:
+            # first in every list: objfile printers (rust-gdb's) are consulted
+            # before global ones, and we want to win when we can handle a type
+            lst.insert(0, _auto_lookup)
+
+
+def _on_new_objfile(event):
+    try:
+        _install_auto_printer(event.new_objfile)
+    except (gdb.error, AttributeError):
+        pass
 
 
 # --------------------------------------------------------------------------
@@ -631,3 +732,8 @@ def register():
     RLocals()
     RArgs()
     RfmtFunction()
+    _install_auto_printer()
+    try:
+        gdb.events.new_objfile.connect(_on_new_objfile)
+    except AttributeError:
+        pass

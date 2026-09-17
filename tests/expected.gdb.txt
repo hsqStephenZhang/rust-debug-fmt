@@ -1,0 +1,7 @@
+$1 = Line(Point { x: 0, y: 0 }, Point { x: 9, y: 9 })
+map = {"one": 1}
+$2 = Point {
+    x: 1,
+    y: -2,
+}
+$3 = rfmt_test::Point {x: 1, y: -2}

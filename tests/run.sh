@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Regression test: build tests/rfmt_test, drive gdb through tests/session.gdb
-# and check that every line of tests/expected.txt shows up in the output.
+# and check that every line of tests/expected.txt (plus expected.<debugger>.txt)
+# shows up in the output.
 #
 #   tests/run.sh                 # gdb, current toolchain
 #   DEBUGGER=lldb tests/run.sh   # lldb
@@ -38,7 +39,7 @@ while IFS= read -r line; do
         printf '  MISSING %s\n' "$line"
         fail=1
     fi
-done <expected.txt
+done < <(cat expected.txt "expected.$DEBUGGER.txt")
 
 if grep -q "Traceback\|Python Exception" "$OUT"; then
     echo "  python exception in output"

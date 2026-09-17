@@ -18,6 +18,15 @@ rprint/p shape
 rprint *p_ref p_ref.x arr[2] num ch big
 printf "%s\n", $rfmt(tuple)
 
+echo ==== automatic mode ====\n
+set rfmt-auto on
+print line
+info locals
+set rfmt-auto-pretty on
+print p
+set rfmt-auto off
+print p
+
 echo ==== process still healthy? ====\n
 down
 finish

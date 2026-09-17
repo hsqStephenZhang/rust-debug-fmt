@@ -16,6 +16,15 @@ rprint -p shape
 rprint *p_ref p_ref.x arr[2] num ch big
 rprint tuple
 
+script print("==== automatic mode ====")
+rfmt-set auto on
+frame variable line
+p wrapped
+rfmt-set pretty on
+v p
+rfmt-set auto off
+v p
+
 script print("==== process still healthy? ====")
 frame select 0
 thread step-out

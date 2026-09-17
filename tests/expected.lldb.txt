@@ -1,0 +1,7 @@
+(rfmt_test::Shape) line = Line(Point { x: 0, y: 0 }, Point { x: 9, y: 9 })
+(rfmt_test::Wrapper<core::option::Option<rfmt_test::Point> >) Wrapper { inner: Some(Point { x: 1, y: -2 }), tags: ["a", "b"] }
+(rfmt_test::Point) p = Point {
+    x: 1,
+    y: -2,
+}
+(rfmt_test::Point) p = (x = 1, y = -2)

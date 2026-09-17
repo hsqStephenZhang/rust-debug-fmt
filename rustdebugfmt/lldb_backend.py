@@ -22,7 +22,8 @@ import lldb
 from . import core
 from .core import Arg, Field, FmtFn, RfmtError, TypeLayout, ValueInfo
 
-SETTINGS = {"verbose": False, "scheduler-lock": True, "timeout": 30}
+SETTINGS = {"verbose": False, "scheduler-lock": True, "timeout": 30, "auto": False}
+CATEGORY = "rust-debug-fmt"
 
 # lldb's C spelling of Rust primitives -> possible Rust names (for `&[E]` lookups)
 _C_TO_RUST = {
@@ -73,7 +74,7 @@ class LldbBackend(core.Backend):
         self._symbol_index = None
         self._string_layout = None
         self._cache_key = None
-        self.frame = None  # set by the commands: the frame to work in
+        self.auto_cache = {}
 
     # -- lldb objects --
     def _target(self):
@@ -100,6 +101,7 @@ class LldbBackend(core.Backend):
             self._functions = {}
             self._symbol_index = None
             self._string_layout = None
+            self.auto_cache = {}
 
     # -- environment --
     def ptr_size(self):
@@ -371,7 +373,55 @@ def debug_format(debugger, value, pretty=False):
 
 
 def _native_text(v):
-    return v.GetSummary() or v.GetValue() or ("<%s>" % (v.GetType().GetName() or "?"))
+    with GUARD:  # GetSummary() would otherwise re-enter our own summary
+        return v.GetSummary() or v.GetValue() or ("<%s>" % (v.GetType().GetName() or "?"))
+
+
+# --------------------------------------------------------------------------
+# automatic mode: a type summary that hands aggregates to Debug::fmt
+# --------------------------------------------------------------------------
+
+GUARD = core.ReentrancyGuard()
+_AGGREGATES = (lldb.eTypeClassStruct, lldb.eTypeClassClass, lldb.eTypeClassUnion, lldb.eTypeClassArray, lldb.eTypeClassEnumeration)
+
+
+def auto_summary(valobj, internal_dict):
+    """lldb summary provider, registered for every type.
+
+    Returning "" makes lldb fall back to its normal display (value, children),
+    so declining is cheap and invisible; returning None would print "None".
+    """
+    if not SETTINGS["auto"] or GUARD.active:
+        return ""
+    try:
+        t = valobj.GetType()
+        if t.IsReferenceType():
+            t = t.GetDereferencedType()
+        if t.GetTypeClass() not in _AGGREGATES:
+            return ""
+        process = valobj.GetProcess()
+        if not process.IsValid() or process.GetState() != lldb.eStateStopped:
+            return ""
+        b = backend_for(valobj.GetTarget().GetDebugger())
+        with GUARD:
+            info = b.value_info(valobj)
+            if not core.auto_supported(b, info, b.auto_cache):
+                return ""
+            return core.debug_format(b, info, SETTINGS.get("pretty", False))
+    except RfmtError as e:
+        backend_for(valobj.GetTarget().GetDebugger()).log("auto: %s" % e)
+        return ""
+
+
+def _set_auto(debugger, on):
+    SETTINGS["auto"] = on
+    if on:
+        debugger.HandleCommand(
+            "type summary add -w %s -x '^.*$' --python-function %s.auto_summary" % (CATEGORY, __name__)
+        )
+        debugger.HandleCommand("type category enable %s" % CATEGORY)
+    else:
+        debugger.HandleCommand("type category disable %s" % CATEGORY)
 
 
 def _frame(exe_ctx, debugger):
@@ -494,6 +544,9 @@ rargs [/p]"""
 class RfmtSet(_Command):
     """Change rust-debug-fmt settings.
 
+rfmt-set auto on|off             make `p`, `frame variable`, IDE variable views use Debug::fmt
+                                 for every aggregate that has one (default off)
+rfmt-set pretty on|off           use {:#?} in automatic mode (default off)
 rfmt-set verbose on|off          log symbol resolution and calls
 rfmt-set scheduler-lock on|off   run only the current thread during the call (default on)
 rfmt-set timeout SECONDS         expression timeout (default 30)
@@ -505,15 +558,19 @@ rfmt-set                         show current settings"""
             for k, v in SETTINGS.items():
                 result.AppendMessage("%s = %s" % (k, v))
             return
-        if len(parts) != 2 or parts[0] not in SETTINGS:
+        if len(parts) != 2 or parts[0] not in SETTINGS and parts[0] != "pretty":
             raise RfmtError(self.__doc__.strip())
         key, val = parts
         if key == "timeout":
             SETTINGS[key] = float(val)
+            return
+        if val not in ("on", "off", "true", "false", "1", "0"):
+            raise RfmtError("expected on|off")
+        flag = val in ("on", "true", "1")
+        if key == "auto":
+            _set_auto(debugger, flag)
         else:
-            if val not in ("on", "off", "true", "false", "1", "0"):
-                raise RfmtError("expected on|off")
-            SETTINGS[key] = val in ("on", "true", "1")
+            SETTINGS[key] = flag
 
 
 def register(debugger):

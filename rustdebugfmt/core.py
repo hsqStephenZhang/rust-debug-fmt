@@ -668,6 +668,41 @@ def debug_format(backend, info, pretty=False):
     return text
 
 
+class ReentrancyGuard(object):
+    """Set while a Debug::fmt call is in flight so that a debugger callback
+    (pretty printer / summary) fired by our own inferior call declines."""
+
+    def __init__(self):
+        self.depth = 0
+
+    @property
+    def active(self):
+        return self.depth > 0
+
+    def __enter__(self):
+        self.depth += 1
+        return self
+
+    def __exit__(self, *exc):
+        self.depth -= 1
+        return False
+
+
+def auto_supported(backend, info, cache):
+    """Cheap, cached answer to "would debug_format handle this type?" for the
+    automatic (pretty printer / summary) mode. Only aggregates qualify."""
+    if info.kind not in ("other", "array"):
+        return False
+    key = info.type_name
+    if key not in cache:
+        try:
+            choose_debug_fmt(backend, info)
+            cache[key] = True
+        except RfmtError:
+            cache[key] = False
+    return cache[key]
+
+
 def render_variable(backend, name, info, native_text, pretty):
     """One `name = value` line for rlocals/rargs, falling back to the debugger's text."""
     try:
