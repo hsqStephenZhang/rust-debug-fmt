@@ -1,0 +1,26 @@
+# lldb batch session used by tests/run.sh (DEBUGGER=lldb) against tests/rfmt_test
+command script import ../rust_debug_fmt_lldb.py
+
+breakpoint set --name rfmt_test::stop_here
+run
+
+script print("==== rargs (frame 0) ====")
+rargs
+
+frame select 1
+script print("==== rlocals (frame 1 = main) ====")
+rlocals
+
+script print("==== rprint ====")
+rprint -p shape
+rprint *p_ref p_ref.x arr[2] num ch big
+rprint tuple
+
+script print("==== process still healthy? ====")
+frame select 0
+thread step-out
+continue
+
+# keep this last: an error aborts the rest of a batch script
+script print("==== error path ====")
+rprint nodebug

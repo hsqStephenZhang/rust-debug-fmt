@@ -1,0 +1,13 @@
+[package]
+name = "rfmt_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+[profile.dev]
+debug = true
+
+[profile.opt1]
+inherits = "dev"
+opt-level = 1

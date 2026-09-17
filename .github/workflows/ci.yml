@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: python syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 -m py_compile rustdebugfmt/*.py rust_debug_fmt_gdb.py rust_debug_fmt_lldb.py
+
+  linux:
+    name: linux / ${{ matrix.debugger }} / rust ${{ matrix.toolchain }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        debugger: [gdb, lldb]
+        toolchain: [stable, "1.84", nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: install ${{ matrix.debugger }}
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.debugger }}" = gdb ]; then
+            sudo apt-get install -y gdb
+            gdb --version | head -1
+          else
+            sudo apt-get install -y lldb python3-lldb
+            lldb --version
+            lldb --batch -o 'script import lldb; print("lldb python ok", lldb.SBDebugger.GetVersionString())'
+          fi
+          # let a non-root debugger trace its children without restrictions
+          sudo sysctl -w kernel.yama.ptrace_scope=0 || true
+      - name: run tests
+        run: DEBUGGER=${{ matrix.debugger }} tests/run.sh
+
+  linux-v0-mangling:
+    name: linux / gdb+lldb / v0 symbol mangling
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y gdb lldb python3-lldb
+          sudo sysctl -w kernel.yama.ptrace_scope=0 || true
+      - run: RUSTFLAGS="-C symbol-mangling-version=v0" DEBUGGER=gdb tests/run.sh
+      - run: RUSTFLAGS="-C symbol-mangling-version=v0" DEBUGGER=lldb tests/run.sh
+
+  macos:
+    name: macos / lldb / rust ${{ matrix.toolchain }}
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable, nightly]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      - name: lldb info
+        run: |
+          xcrun lldb --version
+          sudo DevToolsSecurity -enable || true
+          lldb --batch -o 'script import lldb; print("lldb python ok", lldb.SBDebugger.GetVersionString())'
+      - name: run tests
+        run: DEBUGGER=lldb tests/run.sh

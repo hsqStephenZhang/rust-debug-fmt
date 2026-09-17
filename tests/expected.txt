@@ -1,0 +1,32 @@
+_p = Point { x: 1, y: -2 }
+_s = "arg-str"
+_n = 12345
+text = "héllo"
+(fallback: Debug::fmt returned Err (partial output: 'partial'))
+failing = Failing
+res = Err("bad")
+unit = ()
+big = 340282366920938463463374607431768211455
+num = 42
+ch = 'λ'
+slice_only = [7, 8, 9]
+arr = [10, 20, 30]
+tuple = (1, "two", 3.0)
+rc = [1.5, 2.5]
+map = {"one": 1}
+wrapped = Wrapper { inner: Some(Point { x: 1, y: -2 }), tags: ["a", "b"] }
+both = DEBUG 8
+found only: <rfmt_test::DisplayOnly as core::fmt::Display>::fmt
+empty = Empty
+line = Line(Point { x: 0, y: 0 }, Point { x: 9, y: 9 })
+shape = Circle { center: Point { x: 1, y: -2 }, radius: 2.5 }
+p_box = Point { x: 3, y: 4 }
+p_ref = Point { x: 1, y: -2 }
+p = Point { x: 1, y: -2 }
+    radius: 2.5,
+*p_ref = Point { x: 1, y: -2 }
+p_ref.x = 1
+arr[2] = 30
+(1, "two", 3.0)
+no `<rfmt_test::NoDebug as core::fmt::Debug>::fmt` in the binary
+display-only 7
